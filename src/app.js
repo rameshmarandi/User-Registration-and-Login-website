@@ -4,6 +4,8 @@ const app = express();
 const path = require('path');
 const hbs = require('hbs');
 const bcrypt = require('bcryptjs');
+const cookieParser = require('cookie-parser');
+const auth = require("./middleware/auth")
 require("./db/conn")
 const Register = require("./models/register");
 const port = process.env.PORT || 3000;
@@ -17,6 +19,7 @@ const port = process.env.PORT || 3000;
 // Methods use
 
 app.use(express.static(static_path));
+app.use(cookieParser());
 app.set('view engine', 'hbs');
 app.set("views" ,template_path );
 hbs.registerPartials(partials_path);
@@ -30,6 +33,41 @@ app.use(express.urlencoded({extended:false})); // It is for input form
 app.get("/", (req, res) =>{
     res.render("index");
 });
+
+app.get("/secret", auth ,(req, res) =>{  // Here we are calling auth function.
+    // console.log(`The secret ${req.cookies.jwt}`);
+    res.render("secret");
+});
+// /Logout
+app.get("/logout", auth ,async (req, res) =>{  
+    try{    
+     
+        //    console.log(req.user);
+      // Define the code to delet the tokens from Database
+      // Code for Logout single device
+
+      req.user.tokens = req.user.tokens.filter(( currentToken) =>{
+                 return currentToken.token !== req.token;
+      })
+     
+
+ // Lougout from Multiples device
+
+//  req.user.tokens = [];
+
+ //End
+
+
+        res.clearCookie("jwt");
+
+        console.log("Logout Successful");
+        await req.user.save(); // After delete the cookie we want to save inside the database.
+        res.render("login");
+    }catch(e){
+        res.status(500).send(e);
+    }
+});
+
 app.get("/register", (req, res) =>{
     res.render("register");
 })
@@ -54,9 +92,18 @@ app.post("/register", async (req, res) =>{
 //Calling the Token function Here...
 
         const token =  await ResgisterEmp.generateAuthToken();
+
+          //Defining the Cookies
+
+          res.cookie("jwt" , token , {
+              expires: new Date(Date.now() + 30000),
+              httpOnly: true
+          });
+          console.log(cookie);
+
            //Save the data into Database
            const registered = await ResgisterEmp.save();
-           console.log(`This data is ${registered}`);
+        //    console.log(`This data is ${registered}`);
            res.status(201).render("index");
            
 
@@ -88,6 +135,15 @@ app.post('/login', async (req, res) =>{
     //Generating Token during User Login
     const token =  await userEmail.generateAuthToken();
     // console.log(token);
+    res.cookie("jwt" , token , {
+        expires: new Date(Date.now() + 60000),
+        httpOnly: true,
+        // secure : true
+    });
+
+    // console.log(cookie);
+
+
 
     if(isMatch){
         res.status(201).render("index");
